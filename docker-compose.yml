@@ -1,0 +1,69 @@
+version: "3.9"
+
+services:
+  train:
+    build: .
+    container_name: adaptive-varnet-train
+    volumes:
+      - ./data:/app/data
+      - "C:/Users/Misha/PycharmProjects/data/fastmri:/app/data/fastmri"
+      - ./demo_run:/app/demo_run
+    command: >
+      python adaptive_varnet_model/train_adaptive_varnet_demo.py
+      --mode train
+      --data_path /app/data/fastmri
+      --challenge multicoil
+      --gpus 0
+      --num_workers 0
+      --batch_size 1
+      --max_epochs 1
+      --limit_train_batches 1
+      --default_root_dir /app/demo_run
+      --wandb False
+
+  eval:
+    build: .
+    container_name: adaptive-varnet-eval
+    volumes:
+      - ./data:/app/data
+      - ./demo_run:/app/demo_run
+    command: >
+      python adaptive_varnet_model/train_adaptive_varnet_demo.py
+      --mode test
+      --data_path /app/data
+      --challenge multicoil
+      --gpus 0
+      --num_workers 0
+      --batch_size 1
+      --default_root_dir /app/demo_run
+      --wandb False
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    runtime: nvidia
+
+  infer:
+    build: .
+    container_name: adaptive-varnet-infer
+    volumes:
+      - ./data:/app/data
+      - ./demo_run:/app/demo_run
+    command: >
+      python adaptive_varnet_model/train_adaptive_varnet_demo.py
+      --mode test
+      --data_path /app/data
+      --challenge multicoil
+      --gpus 0
+      --num_workers 0
+      --batch_size 1
+      --default_root_dir /app/demo_run
+      --resume_from_checkpoint /app/demo_run/checkpoints/last.ckpt
+      --wandb False
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    runtime: nvidia

@@ -1,0 +1,9 @@
+__pycache__/
+*.pt
+*.ckpt
+*.egg-info
+*.ipynb
+.env
+wandb/
+demo_run/
+lightning_logs/

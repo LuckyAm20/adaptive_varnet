@@ -149,7 +149,8 @@ class MriModule(pl.LightningModule):
         }
 
     def log_image(self, name, image):
-        self.logger.experiment.add_image(name, image, global_step=self.global_step)
+        if hasattr(self.logger.experiment, "add_image"):
+            self.logger.experiment.add_image(name, image, global_step=self.global_step)
 
     def validation_epoch_end(self, val_logs):
         # aggregate losses

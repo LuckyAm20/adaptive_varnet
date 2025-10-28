@@ -24,6 +24,42 @@ from fastmri.data.transforms import MiniCoilTransform
 from fastmri.pl_modules import FastMriDataModule
 
 
+from pytorch_lightning.loggers import MLFlowLogger
+import mlflow
+def _maybe_get_mlflow_logger(args):
+    """
+    Создаёт MLFlowLogger, если включено --mlflow.
+    URI берётся из args.mlflow_uri или из env (.env).
+    При любых ошибках возвращает None (логгер не используется).
+    """
+    if not getattr(args, "mlflow", False):
+        return None
+
+    # приоритет: аргумент → env → None
+    tracking_uri = getattr(args, "mlflow_uri", None) or os.environ.get("MLFLOW_TRACKING_URI")
+    try:
+        if tracking_uri:
+            mlflow.set_tracking_uri(tracking_uri)
+
+        mlf_logger = MLFlowLogger(
+            experiment_name=getattr(args, "mlflow_experiment", "adaptive-varnet"),
+            tracking_uri=tracking_uri,
+        )
+
+        try:
+            mlf_logger.log_hyperparams(vars(args))
+        except Exception:
+            pass
+
+        print(
+            f"[MLflow] connected to {tracking_uri}, experiment='{getattr(args, 'mlflow_experiment', 'adaptive-varnet')}'")
+
+        return mlf_logger
+    except Exception as e:
+        print(f"[MLflow] disabled (reason: {e})")
+        return None
+
+
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters()) if model is not None else 0
 
@@ -476,7 +512,8 @@ def cli_main(args):
     # ------------
     # trainer
     # ------------
-
+    mlflow_logger = _maybe_get_mlflow_logger(args)
+    logger = mlflow_logger if mlflow_logger is not None else True
     if args.wandb:
         trainer = pl.Trainer.from_argparse_args(
             args, num_sanity_val_steps=0, callbacks=[WandbLoggerCallback(args)], gpus=None,
@@ -493,7 +530,7 @@ def cli_main(args):
             verbose=True,
         )
         trainer = pl.Trainer.from_argparse_args(args, num_sanity_val_steps=0, gpus=None,
-    accelerator=None, callbacks=[checkpoint_callback])
+    accelerator=None, callbacks=[checkpoint_callback], logger=logger,)
 
     # ------------
     # run
@@ -508,6 +545,23 @@ def cli_main(args):
     # Finish up wandb groups
     if args.wandb and args.accelerator == "DDP":
         wandb.finish()
+
+    if mlflow_logger is not None and getattr(args, "mlflow_log_checkpoints", True):
+        try:
+            client = mlflow_logger.experiment  # MlflowClient
+            run_id = mlflow_logger.run_id
+
+            # best
+            best_model_path = getattr(checkpoint_callback, "best_model_path", "")
+            if best_model_path and os.path.exists(best_model_path):
+                client.log_artifact(run_id, best_model_path, artifact_path="checkpoints")
+
+            # last
+            last_ckpt = os.path.join(args.default_root_dir, "checkpoints", "last.ckpt")
+            if os.path.exists(last_ckpt):
+                client.log_artifact(run_id, last_ckpt, artifact_path="checkpoints")
+        except Exception as e:
+            print(f"[MLflow] skip artifact logging: {e}")
 
 
 def build_args():
@@ -723,6 +777,16 @@ def build_args():
         help="Activation function to use in between Policy fc-layers.",
     )
 
+    parser.add_argument(
+        "--mlflow",
+        action="store_true",
+        help="Включить MLflow-логирование."
+    )
+    parser.add_argument("--mlflow_experiment", type=str, default="adaptive-varnet", help="Имя эксперимента в MLflow.")
+    parser.add_argument("--mlflow_uri", type=str, default=None,
+                        help="override для MLFLOW_TRACKING_URI (обычно не нужно).")
+    parser.add_argument("--mlflow_log_checkpoints", type=bool, default=True, help="Логировать чекпоинты как артефакты.")
+
     # data config
     parser = FastMriDataModule.add_data_specific_args(parser)
     parser.set_defaults(
@@ -798,6 +862,8 @@ def build_args():
 
 
 def run_cli():
+    from dotenv import load_dotenv
+    load_dotenv()
     args = build_args()
 
     # Prevent Lightning pre-emption

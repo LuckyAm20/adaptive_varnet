@@ -3,3 +3,8 @@ data
 demo_run
 fastmri.egg-info
 .idea
+.env
+recon_vis
+dataset_cache.pkl
+build
+mlruns

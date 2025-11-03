@@ -4,7 +4,7 @@ Copyright (c) Facebook, Inc. and its affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
-
+import glob
 import json
 import os
 import pathlib
@@ -516,8 +516,7 @@ def cli_main(args):
     logger = mlflow_logger if mlflow_logger is not None else True
     if args.wandb:
         trainer = pl.Trainer.from_argparse_args(
-            args, num_sanity_val_steps=0, callbacks=[WandbLoggerCallback(args)], gpus=None,
-    accelerator=None,
+            args, num_sanity_val_steps=0, callbacks=[WandbLoggerCallback(args)],
         )
     else:
         checkpoint_callback = pl.callbacks.ModelCheckpoint(
@@ -529,14 +528,30 @@ def cli_main(args):
             mode="min",
             verbose=True,
         )
-        trainer = pl.Trainer.from_argparse_args(args, num_sanity_val_steps=0, gpus=None,
-    accelerator=None, callbacks=[checkpoint_callback], logger=logger,)
+        trainer = pl.Trainer.from_argparse_args(args, num_sanity_val_steps=0,
+                                                callbacks=[checkpoint_callback], logger=logger,)
 
     # ------------
     # run
     # ------------
     if args.mode == "train":
         trainer.fit(model, datamodule=data_module)
+        try:
+            ckpt_dir = os.path.join(args.default_root_dir, "checkpoints")
+            last_ckpt = os.path.join(ckpt_dir, "last.ckpt")
+
+            if not os.path.exists(last_ckpt):
+                ckpts = sorted(glob.glob(os.path.join(ckpt_dir, "*.ckpt")), key=os.path.getmtime)
+                if ckpts:
+                    last_ckpt = ckpts[-1]
+
+            if os.path.exists(last_ckpt):
+                print(f"[MLflow] Uploading model checkpoint: {last_ckpt}")
+                mlflow.log_artifact(last_ckpt, artifact_path="checkpoints")
+            else:
+                print("[MLflow] No checkpoint file found to upload.")
+        except Exception as e:
+            print(f"[MLflow] Failed to upload checkpoint: {e}")
     elif args.mode == "test":
         trainer.test(model, datamodule=data_module)
     else:

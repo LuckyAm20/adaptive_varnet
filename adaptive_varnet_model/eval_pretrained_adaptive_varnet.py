@@ -9,7 +9,9 @@ import torch
 import matplotlib.pyplot as plt
 import pandas as pd
 import lpips
-
+import pydicom
+from pydicom.dataset import FileDataset
+import datetime
 from pl_modules import AdaptiveVarNetModule, VarNetModule
 from subsample import create_mask_for_mask_type
 
@@ -140,6 +142,32 @@ def _save_pair(gt: np.ndarray, rec: np.ndarray, out_path: pathlib.Path):
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
 
+
+def _save_dicom_pair(gt, rec, out_dir, base_name="recon"):
+    os.makedirs(out_dir, exist_ok=True)
+
+    def save_dicom(img_array, path):
+        img = np.uint16(_norm01(img_array[0]) * 65535)  # 16-bit grayscale
+
+        file_meta = pydicom.Dataset()
+        ds = FileDataset(path, {}, file_meta=file_meta, preamble=b"\0" * 128)
+        ds.Modality = "MR"
+        ds.ContentDate = str(datetime.date.today()).replace("-", "")
+        ds.ContentTime = str(datetime.datetime.now().time()).replace(":", "").split(".")[0]
+        ds.Rows, ds.Columns = img.shape
+        ds.BitsStored = 16
+        ds.BitsAllocated = 16
+        ds.SamplesPerPixel = 1
+        ds.HighBit = 15
+        ds.PixelRepresentation = 1
+        ds.PhotometricInterpretation = "MONOCHROME2"
+        ds.PixelData = img.tobytes()
+        ds.save_as(path)
+
+    gt_path = os.path.join(out_dir, f"{base_name}_gt.dcm")
+    rec_path = os.path.join(out_dir, f"{base_name}_recon.dcm")
+    save_dicom(gt, gt_path)
+    save_dicom(rec, rec_path)
 
 
 def load_model(
@@ -317,11 +345,20 @@ def cli_main(args):
                     gt_c  = _crop_roi(gt,  box)
                     box_ssims.append(evaluate.ssim(gt_c[np.newaxis, ...], rec_c[np.newaxis, ...]))
 
-                # сохранение картинок
                 if args.save_images and saved < args.max_save:
                     out_path = save_dir / f"{pathlib.Path(vol_name).stem}_slice{sl:03d}.png"
                     _save_pair(gt, rec, out_path)
                     saved += 1
+
+                    if getattr(args, "save_dicom", False):
+                        dicom_dir = save_dir / "dicom"
+                        dicom_dir.mkdir(exist_ok=True, parents=True)
+                        _save_dicom_pair(
+                            gt,
+                            rec,
+                            dicom_dir,
+                            base_name=f"{pathlib.Path(vol_name).stem}_slice{sl:03d}"
+                        )
 
             # проб-маски (для отчёта энтропии/MI)
             if not non_adaptive:
@@ -391,6 +428,11 @@ def build_args():
     parser.add_argument("--save_images", default=True, type=str2bool, help="Сохранять пары GT/Recon.")
     parser.add_argument("--save_images_dir", default="./recon_vis", type=str)
     parser.add_argument("--max_save", default=12, type=int)
+    parser.add_argument(
+        "--save_dicom",
+        action="store_true",
+        help="If set, also save reconstructions and GT in DICOM format."
+    )
 
     parser.add_argument("--mlflow", type=bool, default=True, help="Логировать метрики/артефакты в MLflow.")
     parser.add_argument("--mlflow_experiment", type=str, default="adaptive-varnet-eval", help="Эксперимент MLflow.")

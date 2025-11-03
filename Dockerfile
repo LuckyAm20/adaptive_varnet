@@ -1,4 +1,4 @@
-FROM python:3.9-slim
+FROM pytorch/pytorch:1.8.1-cuda11.1-cudnn8-runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
@@ -20,3 +20,4 @@ CMD ["python", "adaptive_varnet_model/train_adaptive_varnet_demo.py", \
      "--limit_train_batches", "1", \
      "--default_root_dir", "./demo_run", \
      "--wandb", "False"]
+

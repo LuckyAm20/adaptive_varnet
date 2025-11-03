@@ -8,3 +8,5 @@ recon_vis
 dataset_cache.pkl
 build
 mlruns
+fastmri/__pycache__
+adaptive_varnet_model/pl_modules/__pycache__

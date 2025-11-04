@@ -13,23 +13,22 @@ services:
       --data_path /app/data/fastmri
       --challenge multicoil
       --gpus 1
-      --num_workers 8
-      --max_epochs 5
+      --num_workers 22
+      --max_epochs 1
       --limit_train_batches 1
       --default_root_dir /app/demo_run
       --learn_acquisition True
       --mlflow
-      --crop_size 512 512
       --seed 42
       --batch_size 16
       --num_cascades 5
       --accelerations 8
       --center_fractions 0.04
-      --num_sense_lines 4
       --budget 12
       --loupe_mask True
       --use_softplus False
       --slope 10
+      --num_sense_lines 4
       "
     volumes:
       - /mnt/mri-datasets/knee_multicoil:/app/data/fastmri
@@ -58,12 +57,12 @@ services:
       --load_checkpoint /app/demo_run/checkpoints/last.ckpt
       --data_path /app/data/fastmri
       --challenge multicoil
-      --num_workers 8
+      --num_workers 22
       --batch_size 1
       --num_batches 2
       --compute_lpips True
       --save_images True
-      --save_dicom True
+      --save_dicom
       --save_images_dir /app/recon_vis
       "
     volumes:

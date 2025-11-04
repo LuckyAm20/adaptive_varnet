@@ -561,18 +561,16 @@ def cli_main(args):
     if args.wandb and args.accelerator == "DDP":
         wandb.finish()
 
-    if mlflow_logger is not None and getattr(args, "mlflow_log_checkpoints", True):
+    if mlflow_logger is not None and os.path.exists(last_ckpt):
         try:
-            best_model_path = getattr(checkpoint_callback, "best_model_path", "")
-            if best_model_path and os.path.exists(best_model_path):
-                mlflow.log_artifact(best_model_path, artifact_path="checkpoints")
+            client = mlflow_logger.experiment
+            client.log_artifact(mlflow_logger.run_id, last_ckpt, artifact_path="checkpoints")
 
-            last_ckpt = os.path.join(args.default_root_dir, "checkpoints", "last.ckpt")
-            if os.path.exists(last_ckpt):
-                mlflow.log_artifact(last_ckpt, artifact_path="checkpoints")
-
+            if checkpoint_callback and os.path.exists(checkpoint_callback.best_model_path):
+                client.log_artifact(mlflow_logger.run_id, checkpoint_callback.best_model_path,
+                                    artifact_path="checkpoints")
         except Exception as e:
-            print(f"[MLflow] skip artifact logging: {e}")
+            print(f"[MLflow] artifact (client) failed: {e}")
 
 
 def build_args():

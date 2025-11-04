@@ -144,30 +144,45 @@ def _save_pair(gt: np.ndarray, rec: np.ndarray, out_path: pathlib.Path):
 
 
 def _save_dicom_pair(gt, rec, out_dir, base_name="recon"):
+    import numpy as np
+    import os
+    import datetime
+    import pydicom
+    from pydicom.dataset import FileDataset
+
     os.makedirs(out_dir, exist_ok=True)
 
     def save_dicom(img_array, path):
-        img = np.uint16(_norm01(img_array[0]) * 65535)  # 16-bit grayscale
+        img = np.squeeze(img_array)
+        if img.ndim != 2:
+            raise ValueError(f"Unexpected image shape {img.shape}, expected 2D.")
+
+        img_norm = (img - img.min()) / (img.max() - img.min() + 1e-8)
+        img_uint16 = np.uint16(img_norm * 65535)
 
         file_meta = pydicom.Dataset()
         ds = FileDataset(path, {}, file_meta=file_meta, preamble=b"\0" * 128)
         ds.Modality = "MR"
-        ds.ContentDate = str(datetime.date.today()).replace("-", "")
-        ds.ContentTime = str(datetime.datetime.now().time()).replace(":", "").split(".")[0]
-        ds.Rows, ds.Columns = img.shape
+        ds.ContentDate = datetime.datetime.now().strftime("%Y%m%d")
+        ds.ContentTime = datetime.datetime.now().strftime("%H%M%S")
+        ds.Rows, ds.Columns = img_uint16.shape
+        ds.SamplesPerPixel = 1
+        ds.PhotometricInterpretation = "MONOCHROME2"
         ds.BitsStored = 16
         ds.BitsAllocated = 16
-        ds.SamplesPerPixel = 1
         ds.HighBit = 15
         ds.PixelRepresentation = 1
-        ds.PhotometricInterpretation = "MONOCHROME2"
-        ds.PixelData = img.tobytes()
+        ds.PixelData = img_uint16.tobytes()
+
         ds.save_as(path)
 
     gt_path = os.path.join(out_dir, f"{base_name}_gt.dcm")
     rec_path = os.path.join(out_dir, f"{base_name}_recon.dcm")
+
+    # Сохраняем
     save_dicom(gt, gt_path)
     save_dicom(rec, rec_path)
+
 
 
 def load_model(

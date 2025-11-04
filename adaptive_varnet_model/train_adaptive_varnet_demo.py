@@ -563,10 +563,6 @@ def cli_main(args):
 
     if mlflow_logger is not None and getattr(args, "mlflow_log_checkpoints", True):
         try:
-            run_id = mlflow_logger.run_id
-            mlflow.set_tracking_uri(mlflow_logger.experiment.tracking_uri)
-            mlflow.start_run(run_id=run_id)
-
             best_model_path = getattr(checkpoint_callback, "best_model_path", "")
             if best_model_path and os.path.exists(best_model_path):
                 mlflow.log_artifact(best_model_path, artifact_path="checkpoints")
@@ -575,7 +571,6 @@ def cli_main(args):
             if os.path.exists(last_ckpt):
                 mlflow.log_artifact(last_ckpt, artifact_path="checkpoints")
 
-            mlflow.end_run()
         except Exception as e:
             print(f"[MLflow] skip artifact logging: {e}")
 

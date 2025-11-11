@@ -360,10 +360,9 @@ def cli_main(args):
                     gt_c  = _crop_roi(gt,  box)
                     box_ssims.append(evaluate.ssim(gt_c[np.newaxis, ...], rec_c[np.newaxis, ...]))
 
-                if args.save_images and saved < args.max_save:
+                if args.save_images:
                     out_path = save_dir / f"{pathlib.Path(vol_name).stem}_slice{sl:03d}.png"
                     _save_pair(gt, rec, out_path)
-                    saved += 1
 
                     if getattr(args, "save_dicom", False):
                         dicom_dir = save_dir / "dicom"
